@@ -107,8 +107,28 @@ typedef enum {
     GAME_BALL_UP,
 } GameState;
 
+static float timer = 0.0f;
 static GameState state = GAME_PLAY;
 
+
+typedef struct {
+    int from_bottle;
+    int from_index;
+    int to_bottle;
+    int to_index;
+} Move;
+
+static Move prev_move = {0};
+static Move current_move = {0};
+
+
+void set_current_move(int from_bottle, int from_index, int to_bottle, int to_index)
+{
+    current_move.from_bottle = from_bottle;
+    current_move.from_index  = from_index;
+    current_move.to_bottle   = to_bottle;
+    current_move.to_index    = to_index;
+}
 
 
 BallType get_ball_type(bool reset)
@@ -277,11 +297,6 @@ void draw_menu(void)
     
 }
 
-static int from_bottle;
-static int from_index;
-static int to_bottle;
-static int to_index;
-static float timer = 0.0f;
 
 bool move_ball(int from, int to)
 {
@@ -306,10 +321,7 @@ bool move_ball(int from, int to)
     }
     if (to_ball_index == -1) return false;
     
-    from_bottle = from;
-    from_index = from_ball_index;
-    to_bottle = to;
-    to_index = to_ball_index;
+    set_current_move(from, from_ball_index, to, to_ball_index); 
     state = GAME_BALL_MOVE;
     timer = 0.5f;
     bottles[to].balls[to_ball_index].type = from_ball_type;
@@ -333,8 +345,8 @@ void check_win(void)
 void draw_balls_move(int bottle, int x, int y) 
 {
     for (int j = 0; j < BALLS; ++j) { 
-        if (bottle == from_bottle && j == from_index) continue;
-        if (bottle == to_bottle && j == to_index) continue;
+        if (bottle == current_move.from_bottle && j == current_move.from_index) continue;
+        if (bottle == current_move.to_bottle && j == current_move.to_index) continue;
         if (bottles[bottle].balls[j].type == TYPE_NONE) continue;
         Color color = colors[bottles[bottle].balls[j].type];
         int bx = x + BALL_RADIUS + BALL_PAD;
@@ -342,12 +354,12 @@ void draw_balls_move(int bottle, int x, int y)
         DrawCircle(bx, by, BALL_RADIUS, color);
     }
     
-    if (bottle != from_bottle) return; 
+    if (bottle != current_move.from_bottle) return; 
 
     if (timer > 0.25) {
         int sx = GetScreenWidth()/2 - FIELD_WIDTH/2;
         int from_x = x + BALL_RADIUS + BALL_PAD;
-        int to_x = sx + to_bottle*BOTTLE_WIDTH + to_bottle*BOTTLE_PAD + BALL_RADIUS + BALL_PAD;
+        int to_x = sx + current_move.to_bottle*BOTTLE_WIDTH + current_move.to_bottle*BOTTLE_PAD + BALL_RADIUS + BALL_PAD;
         int by = y - BALL_RADIUS - BALL_PAD; 
         int bx = 0;
         if (to_x > from_x) {
@@ -355,19 +367,22 @@ void draw_balls_move(int bottle, int x, int y)
         } else {
             bx = Lerp(to_x, from_x, (0.25 - (0.5 - timer))/0.25);
         } 
-        Color color = colors[bottles[to_bottle].balls[to_index].type];
+        Color color = colors[bottles[current_move.to_bottle].balls[current_move.to_index].type];
         DrawCircle(bx, by, BALL_RADIUS, color);
     } else {
         int sx = GetScreenWidth()/2 - FIELD_WIDTH/2;
         int from_y = y - BALL_RADIUS - BALL_PAD; 
-        int to_y = y + BALL_RADIUS + to_index*BALL_RADIUS*2 + BALL_TOP_PAD - 3;
+        int to_y = y + BALL_RADIUS + current_move.to_index*BALL_RADIUS*2 + BALL_TOP_PAD - 3;
         int by = Lerp(to_y, from_y, timer/0.25);
-        int bx = sx + to_bottle*BOTTLE_WIDTH + to_bottle*BOTTLE_PAD + BALL_RADIUS + BALL_PAD;
-        Color color = colors[bottles[to_bottle].balls[to_index].type];
+        int bx = sx + current_move.to_bottle*BOTTLE_WIDTH + current_move.to_bottle*BOTTLE_PAD + BALL_RADIUS + BALL_PAD;
+        Color color = colors[bottles[current_move.to_bottle].balls[current_move.to_index].type];
         DrawCircle(bx, by, BALL_RADIUS, color);
     }
     timer -= GetFrameTime();
-    if (timer <= 0.0f) state = GAME_PLAY;
+    if (timer <= 0.0f) {
+        state = GAME_PLAY;
+        prev_move = current_move;
+    }
 }
 
 
@@ -438,6 +453,22 @@ void process_mouse_click(Rectangle bottle_rec, int bottle)
     }
 }
 
+
+void draw_cancel_move_button(void)
+{
+    Rectangle button_rec = {50, 50, 200, 50};
+    DrawRectangleRec(button_rec, WHITE);
+    DrawText("Cancel move", 60, 60, 30, BLACK);
+    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), button_rec)) {
+        if (prev_move.to_bottle == -1) return;
+        BallType ball = bottles[prev_move.to_bottle].balls[prev_move.to_index].type; 
+        bottles[prev_move.to_bottle].balls[prev_move.to_index].type = TYPE_NONE;
+        bottles[prev_move.from_bottle].balls[prev_move.from_index].type = ball;
+        prev_move = (Move){-1, -1, -1, -1};
+    }
+}
+
+
 void draw_bottles(void) 
 {
     int sx = GetScreenWidth()/2 - FIELD_WIDTH/2;
@@ -460,6 +491,7 @@ void draw_bottles(void)
             default: break;// assert("Unreacheble");
         }
     }
+    draw_cancel_move_button();
 }
 
 float in_out_cubic(float x)
@@ -514,15 +546,17 @@ void game_frame(void)
         height = GetScreenHeight();
         width = GetScreenWidth();
         ClearBackground(BACKGROUND_COLOR);
+        if (IsKeyPressed(KEY_R) || (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && state == GAME_WIN)) {
+            state = GAME_PLAY;
+            prev_move = (Move){-1, -1, -1, -1};
+            current_move = (Move){-1, -1, -1, -1};
+            init_bottles();
+        }
         switch (state) {
             case GAME_WIN:       draw_win_screen(); break;
             case GAME_PLAY:      draw_bottles();    break;
             case GAME_BALL_MOVE: draw_bottles();    break;
             default:                               break;
-        }
-        if (IsKeyPressed(KEY_R)) {
-            state = GAME_PLAY;
-            init_bottles();
         }
     EndDrawing();
 }
@@ -546,6 +580,8 @@ int main(void)
     height = GetScreenHeight();
     //init_mouse_particles();
     init_bottles();
+    prev_move = (Move){-1, -1, -1, -1};
+    current_move = (Move){-1, -1, -1, -1};
 
 #ifdef PLATFORM_WEB
     raylib_js_set_entry(game_frame);
