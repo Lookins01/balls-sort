@@ -258,16 +258,23 @@ class RaylibJs {
         this.ctx.lineWidth = 1;
         this.ctx.stroke();
     }
-
-    DrawRing(center_ptr, inner_radius, outer_radius, start_angle, end_agnle, segments, color_ptr) {
+    
+    DrawRing(center_ptr, inner_radius, outer_radius, start_angle, end_angle, segments, color_ptr) {
         const buffer = this.wasm.instance.exports.memory.buffer;
         const [x, y] = new Float32Array(buffer, center_ptr, 2);
         const [r, g, b, a] = new Uint8Array(buffer, color_ptr, 4);
         const color = color_hex_unpacked(r, g, b, a); 
         const radius_delta = outer_radius - inner_radius;
         const radius = inner_radius + radius_delta/2; 
+        start_angle = degreesToRadians(start_angle)
+        end_angle = degreesToRadians(end_angle)
+        if (start_angle > end_angle) {
+            const temp = start_angle
+            start_angle = end_angle
+            end_angle = temp
+        }
         this.ctx.beginPath();
-        this.ctx.arc(x, y, radius, start_angle, end_agnle, false);
+        this.ctx.arc(x, y, radius, start_angle, end_angle, false);
         this.ctx.strokeStyle = color;
         this.ctx.lineWidth = radius_delta;
         this.ctx.stroke();
@@ -295,7 +302,7 @@ class RaylibJs {
         this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
     }
 
-    // RLAPI void DrawText(const char *text, int posX, int posY, int fontSize, Color color);       // Draw text (using default font)
+    // RLAPI void DrawText(const char *text, int posX, int posY, int fontSize, Color color); // Draw text (using default font)
     DrawText(text_ptr, posX, posY, fontSize, color_ptr) {
         const buffer = this.wasm.instance.exports.memory.buffer;
         const text = cstr_by_ptr(buffer, text_ptr);
@@ -311,7 +318,7 @@ class RaylibJs {
         }
     }
 
-    // RLAPI void DrawRectangle(int posX, int posY, int width, int height, Color color);                        // Draw a color-filled rectangle
+    // RLAPI void DrawRectangle(int posX, int posY, int width, int height, Color color); // Draw a color-filled rectangle
     DrawRectangle(posX, posY, width, height, color_ptr) {
         const buffer = this.wasm.instance.exports.memory.buffer;
         const color = getColorFromMemory(buffer, color_ptr);
@@ -319,8 +326,23 @@ class RaylibJs {
         this.ctx.fillRect(posX, posY, width, height);
     }
     
+    
+    //RLAPI void DrawTriangle(Vector2 v1, Vector2 v2, Vector2 v3, Color color); // Draw a color-filled triangle (vertex in counter-clockwise order!)
+    DrawTriangle(v1, v2, v3, color_ptr) {
+        const buffer = this.wasm.instance.exports.memory.buffer;
+        const [x1, y1] = new Float32Array(buffer, v1, 2);
+        const [x2, y2] = new Float32Array(buffer, v2, 2);
+        const [x3, y3] = new Float32Array(buffer, v3, 2);
+        const color = getColorFromMemory(buffer, color_ptr);
+        this.ctx.beginPath();
+        this.ctx.moveTo(x1, y1);
+        this.ctx.lineTo(x2, y2);
+        this.ctx.lineTo(x3, y3);
+        this.ctx.fillStyle = color;
+        this.ctx.fill();
+    }
 
-    // RLAPI void DrawRectangleLines(int posX, int posY, int width, int height, Color color);                   // Draw rectangle outline
+    // RLAPI void DrawRectangleLines(int posX, int posY, int width, int height, Color color); // Draw rectangle outline
     DrawRectangleLines(posX, posY, width, height, color_ptr) {
         const buffer = this.wasm.instance.exports.memory.buffer;
         const color = getColorFromMemory(buffer, color_ptr);
@@ -552,6 +574,10 @@ class RaylibJs {
     sinf(value) {
         return Math.sin(value);
     }
+    
+    cosf(value) {
+        return Math.cos(value);
+    }
 
     ColorFromHSV(result_ptr, hue, saturation, value) {
         const buffer = this.wasm.instance.exports.memory.buffer;
@@ -717,6 +743,10 @@ const glfwKeyMapping = {
     "MetaRight":      347,
     "ContextMenu":    348,
     //  GLFW_KEY_LAST   GLFW_KEY_MENU
+}
+
+function degreesToRadians(degrees) {
+    return (degrees % 360) * (Math.PI / 180);
 }
 
 function cstrlen(mem, ptr) {
