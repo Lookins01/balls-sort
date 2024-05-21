@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <assert.h>
 
 #else
 
@@ -17,6 +18,7 @@
 int rand(void);
 double fmod(double x, double y);
 double pow(double x, double y);
+void assert(bool expression);
 
 #endif // PLATFORM_WEB
 
@@ -31,7 +33,12 @@ double pow(double x, double y);
 #define GRUVBOX_ORANGE  CLITERAL(Color){0xFE, 0x80, 0x19, 0xFF}
 // -------------------------------------------------------------
 
-#define BACKGROUND_COLOR CLITERAL(Color){0x18, 0x18, 0x18, 0xFF}
+// Colors
+// -------------------------------------------------------------
+#define BACKGROUND_COLOR CLITERAL(Color){0x28, 0x28, 0x18, 0xFF}
+#define BOTTLE_COLOR     CLITERAL(Color){0xA8, 0x99, 0x84, 0xFF} 
+#define ARROW_COLOR      BOTTLE_COLOR 
+// -------------------------------------------------------------
 
 #define PARTICLES 25
 
@@ -46,7 +53,7 @@ static int height = HEIGHT;
 
 // --------------------------------------
 
-static Color colors[] = {GRUVBOX_RED, GRUVBOX_YELLOW, GRUVBOX_BLUE, GRUVBOX_PURPLE, GRUVBOX_AQUA, GRUVBOX_ORANGE, GRUVBOX_GREEN};
+static Color colors[] = {GRUVBOX_RED, GRUVBOX_YELLOW, GRUVBOX_BLUE, GRUVBOX_AQUA, GRUVBOX_ORANGE, GRUVBOX_GREEN, GRUVBOX_PURPLE};
 //static Color colors[] = {RED, YELLOW, GREEN, PURPLE, BROWN, PINK, ORANGE, GOLD, BLUE, VIOLET};
 static int colors_count = sizeof(colors)/sizeof(*colors);
 
@@ -69,9 +76,9 @@ typedef enum {
     TYPE_GREEN,
     TYPE_BLUE,
     TYPE_BROWN,
-    TYPE_PURPLE,
     TYPE_GOLD,
-    TYPE_NONE,
+    TYPE_PURPLE,
+    BALL_TYPES,
 } BallType;
 
 typedef struct {
@@ -79,8 +86,13 @@ typedef struct {
     float timer;
 } Ball;
 
-#define BALLS 6
-#define BOTTLES (TYPE_NONE + 2)
+#define BUTTON_SIZE 60
+#define ARROW_PAD 10
+#define ARROW_THICK 10
+
+
+#define BALLS 5
+#define BOTTLES (BALL_TYPES + 2)
 
 #define BALL_PAD 5
 #define BALL_TOP_PAD 20
@@ -88,7 +100,7 @@ typedef struct {
 #define BOTTLE_PAD 45
 #define BOTTLE_WIDTH (BALL_RADIUS*2 + BALL_PAD*2)
 #define BOTTLE_HEIGHT (BALL_RADIUS*BALLS*2 + BALL_TOP_PAD)
-#define FIELD_WIDTH (BOTTLE_WIDTH*BOTTLES + BOTTLE_PAD*BOTTLES)
+#define FIELD_WIDTH (BOTTLE_WIDTH*BOTTLES + BOTTLE_PAD*BOTTLES - BOTTLE_PAD)
 #define TEXT_PAD 50
 
 typedef struct {
@@ -133,18 +145,18 @@ void set_current_move(int from_bottle, int from_index, int to_bottle, int to_ind
 
 BallType get_ball_type(bool reset)
 {
-    static int types[TYPE_NONE] = {0};
+    static int types[BALL_TYPES] = {0};
     static bool types_inited = false;
     if (reset == true) types_inited = false;
     if (!types_inited) {
-        for (int i = 0; i < TYPE_NONE; ++i) types[i] = BALLS;
-        if (reset == true) return TYPE_NONE;
+        for (int i = 0; i < BALL_TYPES; ++i) types[i] = BALLS;
+        if (reset == true) return BALL_TYPES;
         types_inited = true;
     }
 
     BallType type; 
     do {
-      type = rand() % TYPE_NONE; 
+      type = rand() % BALL_TYPES; 
     } while (types[type] == 0);
 
     types[type] -= 1;
@@ -156,8 +168,8 @@ BallType get_ball_type(bool reset)
 void init_bottles(void)
 {
     for (int i = 0; i < BALLS; ++i) {
-        bottles[0].balls[i].type = TYPE_NONE;
-        bottles[1].balls[i].type = TYPE_NONE;
+        bottles[0].balls[i].type = BALL_TYPES;
+        bottles[1].balls[i].type = BALL_TYPES;
     }
     
     get_ball_type(true);
@@ -210,7 +222,7 @@ void rand_mouse_particle(Vector2 pos)
     particle->radius = 3 + rand() % 5;
     particle->lifetime = (float)rand() / (float)RAND_MAX;
     particle->max_lifetime = particle->lifetime; 
-    if (true) {
+    if (false) {
         Vector2 mouse_delta = Vector2Normalize(GetMouseDelta());
         Vector2 rand_vec = {.x = 10 + rand() % 100, .y = 10 + rand() % 100}; 
         particle->velocity = Vector2Multiply(Vector2Negate(mouse_delta), rand_vec);
@@ -301,18 +313,18 @@ void draw_menu(void)
 bool move_ball(int from, int to)
 {
     int from_ball_index = -1;
-    BallType from_ball_type = TYPE_NONE;
+    BallType from_ball_type = BALL_TYPES;
     for (int i = 0; i < BALLS; ++i) {
-        if (bottles[from].balls[i].type == TYPE_NONE) continue; 
+        if (bottles[from].balls[i].type == BALL_TYPES) continue; 
         from_ball_type = bottles[from].balls[i].type; 
         from_ball_index = i;
         break;
     }
-    if (from_ball_type == TYPE_NONE) return false;
+    if (from_ball_type == BALL_TYPES) return false;
 
     int to_ball_index = -1;
     for (int i = 0; i < BALLS; ++i) {
-        if (bottles[to].balls[i].type == TYPE_NONE) {
+        if (bottles[to].balls[i].type == BALL_TYPES) {
             if (bottles[to].balls[i+1].type == from_ball_type || i == BALLS - 1) {
                 to_ball_index = i;
                 break;
@@ -325,7 +337,7 @@ bool move_ball(int from, int to)
     state = GAME_BALL_MOVE;
     timer = 0.5f;
     bottles[to].balls[to_ball_index].type = from_ball_type;
-    bottles[from].balls[from_ball_index].type = TYPE_NONE;
+    bottles[from].balls[from_ball_index].type = BALL_TYPES;
     return true;
 }
 
@@ -347,7 +359,7 @@ void draw_balls_move(int bottle, int x, int y)
     for (int j = 0; j < BALLS; ++j) { 
         if (bottle == current_move.from_bottle && j == current_move.from_index) continue;
         if (bottle == current_move.to_bottle && j == current_move.to_index) continue;
-        if (bottles[bottle].balls[j].type == TYPE_NONE) continue;
+        if (bottles[bottle].balls[j].type == BALL_TYPES) continue;
         Color color = colors[bottles[bottle].balls[j].type];
         int bx = x + BALL_RADIUS + BALL_PAD;
         int by = y + BALL_RADIUS + j*BALL_RADIUS*2 + BALL_TOP_PAD - 3;
@@ -391,7 +403,7 @@ void draw_balls(int bottle, int x, int y)
 {
     bool first = true;
     for (int j = 0; j < BALLS; ++j) {
-        if (bottles[bottle].balls[j].type == TYPE_NONE) continue;
+        if (bottles[bottle].balls[j].type == BALL_TYPES) continue;
         Color color = colors[bottles[bottle].balls[j].type];
         int bx = x + BALL_RADIUS + BALL_PAD;
         int by = y + BALL_RADIUS + j*BALL_RADIUS*2 + BALL_TOP_PAD - 3;
@@ -423,7 +435,7 @@ void draw_balls(int bottle, int x, int y)
 void set_first_not_none_ball_timer(int bottle)
 {
       for (int i = 0; i < BALLS; i++) {
-          if (bottles[bottle].balls[i].type == TYPE_NONE) continue;
+          if (bottles[bottle].balls[i].type == BALL_TYPES) continue;
           bottles[bottle].balls[i].timer = 0.0f;
           break;
       }
@@ -454,18 +466,92 @@ void process_mouse_click(Rectangle bottle_rec, int bottle)
 }
 
 
-void draw_cancel_move_button(void)
+void draw_cancel_move_button(int x, int y)
 {
-    Rectangle button_rec = {50, 50, 200, 50};
-    DrawRectangleRec(button_rec, WHITE);
-    DrawText("Cancel move", 60, 60, 30, BLACK);
-    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && CheckCollisionPointRec(GetMousePosition(), button_rec)) {
+    int arrow_radius = (BUTTON_SIZE - ARROW_PAD*2) / 2;
+    Vector2 button_center = {.x = x + BUTTON_SIZE/2, .y = y + BUTTON_SIZE/2};
+    Rectangle button_rec = {x, y, BUTTON_SIZE, BUTTON_SIZE};
+    bool hoverover = CheckCollisionPointRec(GetMousePosition(), button_rec); 
+    Color button_color = hoverover ? ARROW_COLOR : ColorBrightness(BACKGROUND_COLOR, 0.2f);
+    DrawRectangleRec(button_rec, button_color);
+
+    Color arrow_color = hoverover ?  ColorBrightness(BACKGROUND_COLOR, 0.2f) : ARROW_COLOR ;
+    Vector2 center = {.x = x + BUTTON_SIZE/2, .y = y + BUTTON_SIZE/2 + (arrow_radius - ARROW_THICK/2)};
+    DrawRing(center, arrow_radius-ARROW_THICK, arrow_radius, -90, 0, 10, arrow_color);
+    
+    Vector2 v1 = {button_center.x - 0,  button_center.y + 10};
+    Vector2 v2 = {button_center.x - (BUTTON_SIZE/2 - ARROW_PAD), button_center.y + 0};
+    Vector2 v3 = {button_center.x - 0,  button_center.y - 10};
+    DrawTriangle(v1, v3, v2, arrow_color);
+    
+    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && hoverover) {
         if (prev_move.to_bottle == -1) return;
         BallType ball = bottles[prev_move.to_bottle].balls[prev_move.to_index].type; 
-        bottles[prev_move.to_bottle].balls[prev_move.to_index].type = TYPE_NONE;
+        bottles[prev_move.to_bottle].balls[prev_move.to_index].type = BALL_TYPES;
         bottles[prev_move.from_bottle].balls[prev_move.from_index].type = ball;
         prev_move = (Move){-1, -1, -1, -1};
     }
+}
+
+
+void restart_game(void)
+{
+    state = GAME_PLAY;
+    prev_move = (Move){-1, -1, -1, -1};
+    current_move = (Move){-1, -1, -1, -1};
+    init_bottles();
+}
+
+
+void _draw_arrow(int x, int y, float angle, float angle2, Color arrow_color) 
+{
+    int arrow_radius = (BUTTON_SIZE - ARROW_PAD*2) / 2;
+    int xx = x + cosf(angle) * (arrow_radius + 5);
+    int yy = y + sinf(angle) * (arrow_radius + 5);
+
+    int xx1 = x + cosf(angle) * (arrow_radius - ARROW_THICK - 5);
+    int yy1 = y + sinf(angle) * (arrow_radius - ARROW_THICK - 5);
+
+    int xx2 = x + cosf(angle2) * (arrow_radius - ARROW_THICK/2);
+    int yy2 = y + sinf(angle2) * (arrow_radius - ARROW_THICK/2);
+
+    Vector2 v1 = {xx, yy};
+    Vector2 v2 = {xx1, yy1};
+    Vector2 v3 = {xx2, yy2};
+    DrawTriangle(v1, v3, v2, arrow_color);
+}
+
+
+void draw_restart_button(int x, int y)
+{
+    int arrow_radius = (BUTTON_SIZE - ARROW_PAD*2) / 2;
+    Vector2 button_center = {.x = x + BUTTON_SIZE/2, .y = y + BUTTON_SIZE/2};
+    Rectangle button_rec = {x, y, BUTTON_SIZE, BUTTON_SIZE};
+    bool hoverover = CheckCollisionPointRec(GetMousePosition(), button_rec); 
+    Color button_color = hoverover ? ARROW_COLOR : ColorBrightness(BACKGROUND_COLOR, 0.2f);
+    DrawRectangleRec(button_rec, button_color);
+
+    Color arrow_color = hoverover ? ColorBrightness(BACKGROUND_COLOR, 0.2f) : ARROW_COLOR ;
+    Vector2 center = {.x = x + BUTTON_SIZE/2, 
+                      .y = y + BUTTON_SIZE/2 - 1};
+    DrawRing(center, arrow_radius-ARROW_THICK, arrow_radius, -160, -10, 20, arrow_color);
+    DrawRing(center, arrow_radius-ARROW_THICK, arrow_radius, 170, 20, 20, arrow_color);
+      
+    _draw_arrow(button_center.x, button_center.y, -150*PI/180, -175*PI/180, arrow_color);
+    _draw_arrow(button_center.x, button_center.y, 30*PI/180, 0*PI/180, arrow_color);
+
+    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && hoverover) {
+        restart_game(); 
+    }
+}
+
+
+void draw_control_buttons(int y)
+{
+    int x = GetScreenWidth()/2 - (BUTTON_SIZE*2 + 10)/2;
+    draw_cancel_move_button(x, y);
+    x += BUTTON_SIZE + 10;
+    draw_restart_button(x, y);
 }
 
 
@@ -476,22 +562,26 @@ void draw_bottles(void)
     for (int i = 0; i < BOTTLES; ++i) {
         int x = sx + i*BOTTLE_WIDTH + i*BOTTLE_PAD;
         Rectangle bottle_rec = {x, sy, BOTTLE_WIDTH, BOTTLE_HEIGHT};
-        DrawRectangleLinesEx(bottle_rec, 3, GRUVBOX_RED);
+        DrawRectangleLinesEx(bottle_rec, 3, BOTTLE_COLOR);
         switch (state) {
             case GAME_PLAY: {
                 draw_balls(i, x, sy); 
                 process_mouse_click(bottle_rec, i);      
+                draw_control_buttons(sy + BOTTLE_HEIGHT + BOTTLE_PAD);
                 break;
             } 
             case GAME_BALL_MOVE: {
                 draw_balls_move(i, x, sy); 
+                draw_control_buttons(sy + BOTTLE_HEIGHT + BOTTLE_PAD);
                 break;
             }
-            // TODO: check spelling
-            default: break;// assert("Unreacheble");
+            case GAME_WIN: {
+                draw_balls(i, x, sy);
+                break;               
+            } 
+            default: assert("Unreachable");
         }
     }
-    draw_cancel_move_button();
 }
 
 float in_out_cubic(float x)
@@ -501,6 +591,8 @@ float in_out_cubic(float x)
 
 void draw_win_screen(void)
 {
+    draw_bottles();
+    DrawRectangle(0, 0, width, height, ColorAlpha(BACKGROUND_COLOR, 0.4f));
     static float color_time = 0.0f;
     float color_time_max    = 5.0f;
 
@@ -545,6 +637,7 @@ void game_frame(void)
     BeginDrawing();
         height = GetScreenHeight();
         width = GetScreenWidth();
+        float dt = GetFrameTime();
         ClearBackground(BACKGROUND_COLOR);
         if (IsKeyPressed(KEY_R) || (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && state == GAME_WIN)) {
             state = GAME_PLAY;
@@ -558,6 +651,10 @@ void game_frame(void)
             case GAME_BALL_MOVE: draw_bottles();    break;
             default:                               break;
         }
+    Vector2 mouse = GetMousePosition();
+    Vector2 mouse_delta = GetMouseDelta();
+    if (mouse_delta.x != 0 || mouse_delta.y != 0) rand_mouse_particle(mouse);
+    draw_particles(particles, PARTICLES, dt);
     EndDrawing();
 }
 
