@@ -15,6 +15,7 @@
 
 #define FLT_MAX 3.402823466e+38F
 #define RAND_MAX 2147483647 
+
 int rand(void);
 double fmod(double x, double y);
 double pow(double x, double y);
@@ -48,35 +49,19 @@ void assert(bool expression);
 static int width = WIDTH;
 static int height = HEIGHT;
 
-// Settings
-// --------------------------------------
-
-// --------------------------------------
 
 static Color colors[] = {GRUVBOX_RED, GRUVBOX_YELLOW, GRUVBOX_BLUE, GRUVBOX_AQUA, GRUVBOX_ORANGE, GRUVBOX_GREEN, GRUVBOX_PURPLE};
 //static Color colors[] = {RED, YELLOW, GREEN, PURPLE, BROWN, PINK, ORANGE, GOLD, BLUE, VIOLET};
-static int colors_count = sizeof(colors)/sizeof(*colors);
-
-
-typedef struct {
-    Vector2 pos;
-    Vector2 velocity;
-    float max_lifetime;
-    float lifetime;
-    float radius;
-    Color color;
-} Particle;
-
-static Particle particles[PARTICLES];
+//static int colors_count = sizeof(colors)/sizeof(*colors);
 
 
 typedef enum {
     TYPE_RED = 0,
     TYPE_YELLOW,
-    TYPE_GREEN,
     TYPE_BLUE,
-    TYPE_BROWN,
-    TYPE_GOLD,
+    TYPE_AQUA,
+    TYPE_ORANGE,
+    TYPE_GREEN,
     TYPE_PURPLE,
     BALL_TYPES,
 } BallType;
@@ -86,22 +71,39 @@ typedef struct {
     float timer;
 } Ball;
 
-#define BUTTON_SIZE 60
-#define ARROW_PAD 10
-#define ARROW_THICK 10
-
 
 #define BALLS 5
 #define BOTTLES (BALL_TYPES + 2)
 
-#define BALL_PAD 5
-#define BALL_TOP_PAD 20
-#define BALL_RADIUS 20
-#define BOTTLE_PAD 45
-#define BOTTLE_WIDTH (BALL_RADIUS*2 + BALL_PAD*2)
-#define BOTTLE_HEIGHT (BALL_RADIUS*BALLS*2 + BALL_TOP_PAD)
-#define FIELD_WIDTH (BOTTLE_WIDTH*BOTTLES + BOTTLE_PAD*BOTTLES - BOTTLE_PAD)
-#define TEXT_PAD 50
+
+int BUTTON_SIZE;
+int ARROW_PAD;
+int ARROW_THICK;
+
+int BALL_PAD;
+int BALL_TOP_PAD;
+int BALL_RADIUS;
+int BOTTLE_PAD;
+int BOTTLE_WIDTH;
+int BOTTLE_HEIGHT;
+int FIELD_WIDTH; 
+int TEXT_PAD;
+
+void resize_interface(void)
+{
+    BUTTON_SIZE = 60;
+    ARROW_PAD = 10;
+    ARROW_THICK = 10;
+
+    BALL_PAD = 5;
+    BALL_TOP_PAD = 20;
+    BALL_RADIUS = width * 0.03;
+    BOTTLE_PAD = width * 0.02;
+    BOTTLE_WIDTH = (BALL_RADIUS*2 + BALL_PAD*2);
+    BOTTLE_HEIGHT = (BALL_RADIUS*BALLS*2 + BALL_TOP_PAD);
+    FIELD_WIDTH = (BOTTLE_WIDTH*BOTTLES + BOTTLE_PAD*BOTTLES - BOTTLE_PAD);
+    TEXT_PAD = 50;
+}
 
 typedef struct {
     Ball balls[BALLS];
@@ -181,91 +183,6 @@ void init_bottles(void)
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-void init_mouse_particles(void)
-{
-    for (int i = 0; i < PARTICLES; ++i) {
-        particles[i].lifetime = 0.0f;
-    }
-}
-
-
-int get_free_particle_index(void)
-{
-    for (int i = 0; i < PARTICLES; ++i) {
-        if (particles[i].lifetime <= 0.0f) return i;
-    }
-   return -1; 
-}
-
-
-void rand_mouse_particle(Vector2 pos)
-{
-
-    int index = get_free_particle_index();
-    if (index < 0) return;
-    Particle *particle = &particles[index];
-    particle->pos = pos;
-    particle->radius = 3 + rand() % 5;
-    particle->lifetime = (float)rand() / (float)RAND_MAX;
-    particle->max_lifetime = particle->lifetime; 
-    if (false) {
-        Vector2 mouse_delta = Vector2Normalize(GetMouseDelta());
-        Vector2 rand_vec = {.x = 10 + rand() % 100, .y = 10 + rand() % 100}; 
-        particle->velocity = Vector2Multiply(Vector2Negate(mouse_delta), rand_vec);
-    } else {
-        particle->velocity.x = -100 + rand() % 200;
-        particle->velocity.y = -100 + rand() % 200;
-    }
-    particle->color = colors[rand() % colors_count];
-}
-
-
-void update_particle_pos(Particle particles[], int particles_size, int index, float dt)
-{
-    if (index < 0 || index >= particles_size) return;
-    Particle *particle = &particles[index];
-
-    float x = particle->pos.x + particle->velocity.x*dt;
-    if (x - particle->radius < 0 || x + particle->radius > width) {
-        particle->velocity.x *= -1;
-    } else {
-        particle->pos.x = x;
-    }
-
-    float y = particle->pos.y + particle->velocity.y*dt;
-    if (y - particle->radius < 0 || y + particle->radius > height) {
-        particle->velocity.y *= -1;
-    } else {
-        particle->pos.y = y;
-    }
-}
-
-
-void draw_particles(Particle particles[], int particles_count, float dt)
-{
-    for (int i = 0; i < particles_count; ++i) {
-        Particle *particle = &particles[i];
-        if (particle->lifetime <= 0) continue;
-        float value = particle->lifetime / particle->max_lifetime;
-        DrawCircleV(particle->pos, particle->radius, ColorAlpha(particle->color, value));
-        update_particle_pos(particles, particles_count, i, dt);
-        particle->lifetime -= dt;
-    }
-}
 
 
 void draw_switch(const char *text, int x, int y, bool *value) {
@@ -637,7 +554,7 @@ void game_frame(void)
     BeginDrawing();
         height = GetScreenHeight();
         width = GetScreenWidth();
-        float dt = GetFrameTime();
+        resize_interface();
         ClearBackground(BACKGROUND_COLOR);
         if (IsKeyPressed(KEY_R) || (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && state == GAME_WIN)) {
             state = GAME_PLAY;
@@ -651,10 +568,6 @@ void game_frame(void)
             case GAME_BALL_MOVE: draw_bottles();    break;
             default:                               break;
         }
-    Vector2 mouse = GetMousePosition();
-    Vector2 mouse_delta = GetMouseDelta();
-    if (mouse_delta.x != 0 || mouse_delta.y != 0) rand_mouse_particle(mouse);
-    draw_particles(particles, PARTICLES, dt);
     EndDrawing();
 }
 
